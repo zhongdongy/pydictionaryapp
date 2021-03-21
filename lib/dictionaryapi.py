@@ -9,12 +9,15 @@ class WordRef:
         self.function_label = ''
         self.audio_file = ''
         self.uuid = ''
+        self.pronunciation = ''
 
     def __str__(self):
-        return f'Word: {self.word}\n' \
-               f'Function Label: {self.function_label}\n' \
-               f'Audio File: {self.audio_file}\n' \
-               f'UUID: {self.uuid}\n'
+        return f'''Word: {self.word}
+Pronunciation: {self.pronunciation}
+Function Label: {self.function_label}
+Audio File: {self.audio_file}
+UUID: {self.uuid}
+'''
 
 
 class DictionaryAPI:
@@ -34,7 +37,7 @@ class DictionaryAPI:
             result = WordRef()
             _temp_func_labels = set()
             for r in response:
-                if re.match(r'^' + word + r':\d+', r['meta']['id']):
+                if re.match(r'^' + word + r'(?::.+)?', r['meta']['id'], flags=re.IGNORECASE):
                     parsed = self._parse(r, word)
                     if result.audio_file == '':
                         result.audio_file = parsed.audio_file
@@ -42,6 +45,8 @@ class DictionaryAPI:
                         result.uuid = parsed.uuid
                     result.word = word
                     _temp_func_labels.add(parsed.function_label)
+                    if result.pronunciation == '':
+                        result.pronunciation = parsed.pronunciation
             result.function_label = ' / '.join(_temp_func_labels)
             return result
         else:
@@ -52,10 +57,10 @@ class DictionaryAPI:
             return None
 
         parsed_word = WordRef()
-        parsed_word.word = re.search(r'^(' + word + r'):\d+', res['meta']['id']).group(1)
+        parsed_word.word = word
         parsed_word.uuid = res['meta']['uuid']
-        parsed_word.function_label = res['fl']
-        if 'prs' in res['hwi']:
+        parsed_word.function_label = res['fl'] if 'fl' in res else ''
+        if 'prs' in res['hwi'] and 'sound' in res['hwi']['prs'][0]:
             _audio: str = res['hwi']['prs'][0]['sound']['audio']
             _subdirectory = ''
             if _audio.startswith('bix'):
@@ -67,5 +72,6 @@ class DictionaryAPI:
             else:
                 _subdirectory = _audio[0]
             parsed_word.audio_file = self._AUDIO_URL.replace('$subdirectory', _subdirectory).replace('$audio', _audio)
+            parsed_word.pronunciation = f"/{res['hwi']['prs'][0]['mw']}/".replace('-', '')
 
         return parsed_word
